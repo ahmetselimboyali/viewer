@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "autoprefixer": "^10.4.14",
     "papaparse": "^5.4.1",
     "plotly.js": "^2.27.0",
     "react": "^18.2.0",
@@ -18,13 +17,10 @@
     "react-plotly.js": "^2.5.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.11",
     "@types/papaparse": "^5.3.16",
     "@types/react": "^19.1.8",
     "@types/react-plotly.js": "^2.6.3",
     "@vitejs/plugin-react": "^4.0.4",
-    "postcss": "^8.4.24",
-    "tailwindcss": "^4.1.11",
     "vite": "^7.0.3"
   }
 }

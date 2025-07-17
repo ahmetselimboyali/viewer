@@ -37,7 +37,15 @@
 
 /* Modern button animations */
 .modern-button {
-  @apply transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-lg active:scale-95;
+  transition: all 0.3s ease-in-out;
+  transform: scale(1);
+}
+.modern-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.modern-button:active {
+  transform: scale(0.95);
 }
 
 /* Gradient text */
@@ -55,17 +63,23 @@
 }
 
 .float-animation {
-  animation: float 3s ease-in-out infinite;
+  animation: float 3s ease infinite;
 }
 
 /* Modern card hover effects */
 .modern-card {
-  @apply transition-all duration-300 ease-in-out hover:shadow-2xl hover:-translate-y-1;
+  transition: all 0.3s ease;
+  transform: translateY(0);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.modern-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
 /* Smooth transitions for all elements */
 * {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s ease;
 }
 
 /* Custom focus styles */

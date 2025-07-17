@@ -1,199 +1,19 @@
+
+
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import Papa from "papaparse";
-import Plot from "react-plotly.js";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-
-// Utility functions
-function movingAverage(data, windowSize) {
-  return data.map((_, idx, arr) => {
-    const start = Math.max(0, idx - windowSize + 1);
-    const slice = arr.slice(start, idx + 1);
-    const avg = slice.reduce((sum, val) => sum + val, 0) / slice.length;
-    return avg;
-  });
-}
-
-function timeBasedMovingAverage(dataPoints, hoursWindow) {
-  return dataPoints.map((point, idx) => {
-    const currentTime = point.timestamp.getTime();
-    const windowStart = currentTime - (hoursWindow * 60 * 60 * 1000); // Convert hours to milliseconds
-
-    // Find all points within the time window
-    const windowPoints = dataPoints.filter((p, pIdx) =>
-      pIdx <= idx && p.timestamp.getTime() >= windowStart
-    );
-
-    if (windowPoints.length === 0) return point.value;
-
-    const avg = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
-    return avg;
-  });
-}
-
-// This function is completely rewritten to ensure it works correctly
-function makeRelativeToZero(values) {
-  if (!values || values.length === 0) return values;
-
-  // Find first valid number to use as baseline
-  let firstValidValue = null;
-  for (let i = 0; i < values.length; i++) {
-    const num = Number(values[i]);
-    if (!isNaN(num)) {
-      firstValidValue = num;
-      break;
-    }
-  }
-
-  // If no valid numbers found, return original array
-  if (firstValidValue === null) return values;
-
-  // Make a deep copy and subtract the first value from all values
-  return values.map(val => {
-    const num = Number(val);
-    return isNaN(num) ? val : num - firstValidValue;
-  });
-}
-
-function calculateStatistics(data) {
-  if (data.length === 0) return { mean: 0, stdDev: 0, min: 0, max: 0, median: 0, count: 0 };
-  const sorted = [...data].sort((a, b) => a - b);
-  const mean = data.reduce((sum, val) => sum + val, 0) / data.length;
-  const variance = data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length;
-  const stdDev = Math.sqrt(variance);
-
-  return {
-    mean: mean.toFixed(4),
-    stdDev: stdDev.toFixed(4),
-    min: Math.min(...data).toFixed(4),
-    max: Math.max(...data).toFixed(4),
-    median: sorted[Math.floor(sorted.length / 2)].toFixed(4),
-    count: data.length
-  };
-}
-
-// Smart Auto-Scale Functions
-function calculateOptimalDateRange(data, xColumn, convertTimestamp) {
-  if (!data.length) return { start: null, end: null };
-
-  const dates = data.map(row => {
-    const val = row[xColumn];
-    return convertTimestamp(val);
-  }).filter(d => d && !isNaN(d.getTime())).sort((a, b) => a - b);
-
-  if (!dates.length) return { start: null, end: null };
-
-  const range = dates[dates.length - 1] - dates[0];
-  const padding = range * 0.05; // 5% padding
-
-  return {
-    start: new Date(dates[0].getTime() - padding),
-    end: new Date(dates[dates.length - 1].getTime() + padding)
-  };
-}
-
-function calculateOptimalDataRange(values) {
-  if (!values.length) return { min: 0, max: 1 };
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min;
-  const padding = range * 0.1; // 10% padding
-
-  return {
-    min: min - padding,
-    max: max + padding
-  };
-}
-
-function detectDataPatterns(data, columns) {
-  const patterns = {};
-
-  columns.forEach(col => {
-    const values = data.map(row => parseFloat(row[col])).filter(val => !isNaN(val));
-    if (values.length === 0) return;
-
-    const stats = calculateStatistics(values);
-    const range = parseFloat(stats.max) - parseFloat(stats.min);
-    const cv = parseFloat(stats.stdDev) / parseFloat(stats.mean); // Coefficient of variation
-
-    patterns[col] = {
-      volatility: cv > 0.5 ? 'high' : cv > 0.2 ? 'medium' : 'low',
-      trend: detectTrend(values),
-      seasonality: detectSeasonality(values),
-      outliers: detectOutliers(values),
-      range: range,
-      scale: range > 1000 ? 'large' : range > 100 ? 'medium' : 'small'
-    };
-  });
-
-  return patterns;
-}
-
-function detectTrend(values) {
-  if (values.length < 3) return 'none';
-
-  let increasing = 0, decreasing = 0;
-  for (let i = 1; i < values.length; i++) {
-    if (values[i] > values[i - 1]) increasing++;
-    else if (values[i] < values[i - 1]) decreasing++;
-  }
-
-  const total = values.length - 1;
-  if (increasing / total > 0.7) return 'increasing';
-  if (decreasing / total > 0.7) return 'decreasing';
-  return 'stable';
-}
-
-function detectSeasonality(values) {
-  // Simple seasonality detection based on periodicity
-  if (values.length < 12) return false;
-
-  const periods = [7, 12, 24, 30]; // Common periods
-  for (const period of periods) {
-    if (values.length >= period * 2) {
-      let correlation = 0;
-      const cycles = Math.floor(values.length / period);
-
-      for (let i = 0; i < period && cycles > 1; i++) {
-        const cycleValues = [];
-        for (let j = 0; j < cycles; j++) {
-          if (i + j * period < values.length) {
-            cycleValues.push(values[i + j * period]);
-          }
-        }
-
-        if (cycleValues.length > 1) {
-          const mean = cycleValues.reduce((a, b) => a + b) / cycleValues.length;
-          const variance = cycleValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / cycleValues.length;
-          if (variance < mean * 0.1) correlation++; // Low variance indicates pattern
-        }
-      }
-
-      if (correlation / period > 0.6) return period;
-    }
-  }
-
-  return false;
-}
-
-function detectOutliers(values) {
-  if (values.length < 4) return [];
-
-  const sorted = [...values].sort((a, b) => a - b);
-  const q1 = sorted[Math.floor(sorted.length * 0.25)];
-  const q3 = sorted[Math.floor(sorted.length * 0.75)];
-  const iqr = q3 - q1;
-  const lowerBound = q1 - 1.5 * iqr;
-  const upperBound = q3 + 1.5 * iqr;
-
-  return values.map((val, idx) => ({
-    index: idx,
-    value: val,
-    isOutlier: val < lowerBound || val > upperBound
-  })).filter(item => item.isOutlier);
-}
-
+import Sidebar from './components/sidebar/Sidebar';
+import ChartContainer from './components/charts/ChartContainer';
+import { 
+  movingAverage, 
+  timeBasedMovingAverage, 
+  makeRelativeToZero, 
+  calculateStatistics,
+  detectDataPatterns
+} from './components/utils/DataProcessor';
+// Utility functions imported from DataProcessor.jsx
 const CHART_TYPES = {
   LINE: 'line',
   SCATTER: 'scatter',
@@ -237,7 +57,7 @@ export default function App() {
   const [dataColumns, setDataColumns] = useState([]);
   const [fileName, setFileName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);  // Start with sidebar closed
   const [darkMode, setDarkMode] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -838,10 +658,10 @@ export default function App() {
   );
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'} transition-all duration-500`}>
-      <div className="flex h-screen">
+    <div className={`min-h-screen ${darkMode ? 'bg-gradient-to-br from-gray-900 to-slate-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'} transition-all duration-500`}>
+      <div className="flex h-screen gap-4 p-4">
         {/* Clean Sidebar */}
-        <div className={`${sidebarOpen ? 'w-80' : 'w-16'} transition-all duration-300 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r flex flex-col shadow-lg`}>
+        <div className={`fixed left-0 top-0 h-screen z-10 ${sidebarOpen ? 'w-80' : 'w-16'} transition-all duration-300 ${darkMode ? 'bg-gray-800/95 backdrop-blur-sm border-gray-600' : 'bg-white border-gray-200'} border-r flex flex-col shadow-lg`}>
           {/* Header */}
           <div className="p-6 border-b border-slate-700/30">
             <div className="flex items-center justify-between">
@@ -1306,7 +1126,7 @@ export default function App() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col ${sidebarOpen ? 'ml-80' : 'ml-16'} transition-all duration-300`}>
           {/* Header */}
           <div className={`p-4 border-b ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
             <div className="flex items-center justify-between">
